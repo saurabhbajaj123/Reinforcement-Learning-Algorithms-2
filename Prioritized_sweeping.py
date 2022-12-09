@@ -137,16 +137,18 @@ class PrioritizedSweeping():
         """
         if s == (4, 4): return s
         rand = random.uniform(0, 1)
-        if rand < 0.8:
-            s_prime = (s[0] + a[0], s[1] + a[1])
-        elif 0.8 < rand <  0.85:
-            a = self.actions[(self.actions.index(a) + 1) % 4]
-            s_prime = (s[0] + a[0], s[1] + a[1])
-        elif  0.85 < rand <  0.9:
-            a = self.actions[(self.actions.index(a) - 1) % 4]
-            s_prime = (s[0] + a[0], s[1] + a[1])
-        else:
-            s_prime = s
+        s_prime = (s[0] + a[0], s[1] + a[1])
+
+        # if rand < 0.8:
+        #     s_prime = (s[0] + a[0], s[1] + a[1])
+        # elif 0.8 < rand <  0.85:
+        #     a = self.actions[(self.actions.index(a) + 1) % 4]
+        #     s_prime = (s[0] + a[0], s[1] + a[1])
+        # elif  0.85 < rand <  0.9:
+        #     a = self.actions[(self.actions.index(a) - 1) % 4]
+        #     s_prime = (s[0] + a[0], s[1] + a[1])
+        # else:
+        #     s_prime = s
         if (s_prime == (2,2)) or (s_prime == (3,2)) or (s_prime[0] < 0) or (s_prime[0] > 4) or (s_prime[1] < 0) or (s_prime[1] > 4):
             s_prime = s
         return s_prime
@@ -172,7 +174,7 @@ class PrioritizedSweeping():
         states = self.states.copy()
         states.remove((2,2))
         states.remove((3,2))
-        states.remove((4,4))
+        # states.remove((4,4))
         random_index = random.randint(0,len(states)-1)
         return states[random_index]
 
@@ -327,8 +329,7 @@ class PrioritizedSweeping():
         
     def get_rs_from_model(self, s, a):
         a_index = self.actions.index(a)
-        r, s_prime = self.model[s[0]][s[1]][a_index]
-        return (r, s_prime)
+        return self.model[s[0]][s[1]][a_index]
 
     def leading_to_s(self, s):
         return self.predecessor[s] 
@@ -336,8 +337,9 @@ class PrioritizedSweeping():
     def update_leading_to_s(self, s_, a_, s):
         if (s_, a_) not in self.predecessor[s]:
             self.predecessor[s].append((s_, a_))
+        # print(self.predecessor[s])
 
-    def prio_sweep(self, eps, threshold):
+    def prio_sweep(self, eps, threshold, n_iters, break_iters, running_average_length):
         max_norm = []
         mse = []
         itr_number = []
@@ -345,13 +347,23 @@ class PrioritizedSweeping():
         num_actions = 0
         num_episodes_list = []
         num_actions_list = []
+        alpha = self.alpha
+        prev_v_list = []
         while True:
             # print("itr number = {}".format(count))
             count += 1
-            
+            alpha = max(alpha*0.999, 0.0001)
             prev_q = copy.deepcopy(self.q)
             prev_v = copy.deepcopy(self.v)
+
+            if len(prev_v_list) > running_average_length - 1:
+                prev_v_list.pop(0)
+            prev_v_list.append(copy.deepcopy(self.v))
+            # if count % 5 == 0:
+            #     self.predecessor = defaultdict(list, {k : [] for k in self.states})
+
             s = self.d0()
+            # print(s)
             while s != (4, 4):
                 # print("state = {}".format(s))
                 a = self.pi_esoft_func(self.test_pol, s, eps)
@@ -360,6 +372,7 @@ class PrioritizedSweeping():
                 r = self.reward(s, a, s_prime)
 
                 self.model_update(s, a, s_prime, r)
+                
 
                 row = s[0]
                 col = s[1]
@@ -367,8 +380,8 @@ class PrioritizedSweeping():
                 next_row = s_prime[0] 
                 next_col = s_prime[1]
 
-                priority = (r + (self.gamma * np.amax(self.q[next_row][next_col])) - self.q[row][col][index_a])
-
+                priority = abs(r + (self.gamma * np.amax(self.q[next_row][next_col])) - self.q[row][col][index_a])
+                # print("priority = {}".format(priority))
                 if priority > threshold:
                     # print(-priority, s, a)
                     self.pq.put((-priority, s, a))
@@ -376,13 +389,15 @@ class PrioritizedSweeping():
                 s = s_prime
 
                 # while not self.pq.empty():
-                for itr_count in range(1000):
+                for itr_count in range(n_iters):
 
                     if self.pq.empty():
                         break
                     # print("itr_count = {}".format(itr_count))
                     # print("self.pq = {}".format(self.pq))
+
                     _, s1, a1 = self.pq.get()
+
                     # print("s1 = {}, a1 = {}".format(s1, a1))
                     r1, s_prime1 = self.get_rs_from_model(s1, a1)
                     # print("entering for loop")
@@ -392,15 +407,23 @@ class PrioritizedSweeping():
                     index_a = self.actions.index(a1)
                     next_row = s_prime1[0] 
                     next_col = s_prime1[1]
+                    # if row == 2 and col == 0: 
+                    #     print(self.q[row][col])
+                    #     print(self.test_pol[row][col])
+                    # if row == 4 and col == 1: print(self.q[row][col][index_a])
+                    # if row == 4 and col == 0: print(self.q[row][col][index_a])
 
                     self.q[row][col][index_a] = self.q[row][col][index_a] \
-                        + self.alpha * (r1 + (self.gamma * np.amax(self.q[next_row][next_col])) - self.q[row][col][index_a]) 
-                    
-                    # self.e_soft_policy_update(s=s1, eps=eps)
-                    self.softmax_policy_update(s=s1, sigma=count)
+                        + alpha * (r1 + (self.gamma * np.amax(self.q[next_row][next_col])) - self.q[row][col][index_a]) 
+
+                    eps=max(eps*0.999, 0.0001)
+                    self.e_soft_policy_update(s=s1, eps=eps)
+                    # self.softmax_policy_update(s=s1, sigma=count)
+
                     for s_, a_ in self.leading_to_s(s1):
                         # print("s_ = {}, a_ = {}".format(s_, a_))
-                        r_ = self.reward(s_, a_, s1)
+                        # r_ = self.reward(s_, a_, s1)
+                        r_, _ = self.get_rs_from_model(s_, a_)
 
                         row_ = s_[0]
                         col_ = s_[1]
@@ -408,7 +431,8 @@ class PrioritizedSweeping():
                         next_row_ = s1[0]
                         next_col_ = s1[1]
 
-                        priority_ = (r_ + (self.gamma * np.amax(self.q[next_row_][next_col_])) - self.q[row_][col_][index_a_])
+                        priority_ = abs(r_ + (self.gamma * np.amax(self.q[next_row_][next_col_])) - self.q[row_][col_][index_a_])
+                        # print(priority_, s_, a_, s1)
                         if priority_ > threshold:
                             self.pq.put((-priority_, s_, a_))
 
@@ -419,23 +443,25 @@ class PrioritizedSweeping():
             if count % 250 == 0:
                 mse.append(self.mse(self.v, self.v_star))
                 itr_number.append(count)
-            if count > 200:
+            if count > break_iters:
                 break
             # for s in self.states:
             #     self.v[s[0]][s[1]] = sum([self.test_pol[s[0]][s[1]][a_index]*self.q[s[0]][s[1]][a_index] for a_index, a in enumerate(self.actions)])
             self.v = np.max(self.q, axis=2)
+
             # print("shape = {}".format((self.v).shape))
             # if np.amax(abs(self.v - prev_v)) < self.delta:
             #     break            
             max_norm.append(np.amax(abs(self.v - self.v_star)))
             if np.amax(abs(self.v - self.v_star)) < self.delta:
                 break
-
+            if np.amax(abs(self.v - np.mean(prev_v_list, axis=0))) < self.delta:
+                break
             plt.plot(max_norm)
             plt.title("Max norm")
             plt.xlabel("Iterations")
             plt.ylabel("Max norm")
-            plt.pause(0.05)
+            plt.pause(0.0001)
 
 
             # num_acts_mean_list.append(num_actions_list)
@@ -454,7 +480,8 @@ class PrioritizedSweeping():
 
         # column_average = [sum(sub_list) / len(sub_list) for sub_list in zip(*num_acts_mean_list)]
         # plt.figure(0)
-        # plt.plot(column_average, num_episodes_list, 'k')
+        # plt.plot(column_a
+        # verage, num_episodes_list, 'k')
         # plt.title("Learning curve")
         # plt.xlabel("Time Steps")
         # plt.ylabel("Episodes")
@@ -481,8 +508,9 @@ class PrioritizedSweeping():
         # # plt.title("Mean squared Error for alpha = {}".format(self.alpha))
         # # plt.xlabel("Iterations")
         # # plt.ylabel("MSE")
+        # plt.pause(0.0001)
         # plt.show()
-        return count, num_episodes_list, num_actions_list, mse, itr_number
+        return count, num_episodes_list, num_actions_list, mse, itr_number, max_norm[-1]
     
 
 
@@ -512,12 +540,13 @@ def main():
     obstacles = [(2,2), (3,2)]
     goal = [(0,2), (4,4)]
 
-    gamma = 0.9
-    alpha = 0.1
-    delta = 0.1
-    sigma = 1
-    threshold = 0.5
-    eps = 0.1
+    # gamma = 0.9
+    # alpha = 0.1
+    # delta = 0.1
+    # sigma = 1
+    # threshold = 0.0
+    # eps = 0.1
+    # n_iters = 10
     # print("running Q Learning")
     num_acts_mean_list = []
     mse_mean_list = []
@@ -567,11 +596,38 @@ def main():
     # # print(sarsa.v)
     # plt.show()
 
+    gamma = 0.9
+    alpha = 0.1
+    delta = 0.1
+    sigma = 1
+    threshold = 0.0 #1e-9
+    eps = 0.1
+    n_iters = 25
+    break_iters = 500
+    running_average_length = 200
 
-    ps = PrioritizedSweeping(num_rows=5, num_cols=5, alpha=alpha, gamma=gamma, delta=delta)
-    count, num_episodes_list, num_actions_list, mse, itr_number = ps.prio_sweep(eps=eps, threshold=threshold)
-    print(ps.v)
-    ps.print_policy()
-
+    best_threshold = None
+    best_alpha = None
+    best_eps = None
+    best_sigma = None
+    best_v = None
+    best_n_iters = None
+    best_max_norm = float("inf")
+    for best_sigma in np.arange(1, 5, 1):
+        ps = PrioritizedSweeping(num_rows=5, num_cols=5, alpha=alpha, gamma=gamma, delta=delta)
+        count, num_episodes_list, num_actions_list, mse, itr_number, max_norm = ps.prio_sweep(eps=eps, threshold=threshold, n_iters=n_iters, break_iters=break_iters, running_average_length=running_average_length)
+        if best_max_norm > max_norm:
+            best_max_norm = max_norm
+            best_threshold = threshold
+            best_sigma = sigma
+            best_alpha = alpha
+            best_eps = eps
+            best_v = ps.v
+            best_n_iters = n_iters
+            best_break_iters = break_iters
+            ps.print_policy()
+        # print(ps.v)
+    print("alpha = {}, eps = {}, threshold = {}, sigma= {}, n_iters = {}, break_iters = {} max_norm = {}".format(best_alpha, best_eps, best_threshold, best_sigma, best_n_iters, break_iters, best_max_norm))
+    print(best_v)
 if __name__ == '__main__':
     main()
