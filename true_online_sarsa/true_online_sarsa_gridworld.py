@@ -49,14 +49,18 @@ def get_x(state, action):
     return x
 
 def true_online_sarsa(gamma, alpha, lam, epsilon, v_star, max_iters):
-    # ep -> s, a, r, s', a'
-    iters = 0
+    iters = 1
     q = np.zeros((5, 5, 4)) # q -> [["AR", "AL", "AD", "AU"]], 0 - AR, 1 - AL, 2 - AD, 3 - AU
     w = np.random.rand((100))
-    v_max_norms = []
+    episodes_time = []
+    v_diff = []
     while True:
         if iters == max_iters:
             break
+        # if (iters % 2000) == 0 and epsilon > 0.10:
+        #     epsilon -= 0.05
+        #     print(epsilon)
+        epsilon = min(epsilon, 20*epsilon/iters)
         # start an episode
         start_state = random.sample(valid_states, 1)[0]
         s = start_state
@@ -64,7 +68,9 @@ def true_online_sarsa(gamma, alpha, lam, epsilon, v_star, max_iters):
         x = get_x(s, a)
         Q_old = 0
         z = np.zeros((100))
+        episodes_time.append(iters)
         while s != (4, 4):
+            episodes_time.append(iters)
             next_state, reward = observe(s, a)
             next_action = choose_action(q, next_state, epsilon)
             next_x = get_x(next_state, next_action)
@@ -86,15 +92,14 @@ def true_online_sarsa(gamma, alpha, lam, epsilon, v_star, max_iters):
             # print(q)
             # q[s[0]][s[1]][a] += alpha * (reward + gamma * q[next_state[0]][next_state[1]][next_action] - q[s[0]][s[1]][a])
 
-        pi = get_pi(q)   
-        v_est = get_v(q, pi)
-        v_max_norms.append(np.amax(np.abs(v_est - v_star)))
-        plt.plot(v_max_norms)
-        plt.pause(0.0001)
+        v_est = get_v(q, get_pi(q))
+        v_diff.append(np.sum(np.square(v_est - v_star))/23)
+        if np.amax(v_diff) < 0.001:
+            break
         iters += 1
         
 
-    return q, iters
+    return q, iters, episodes_time, v_diff
 
 def get_greedy_pi(q):
     pi = {}
@@ -175,19 +180,65 @@ pi_star = {
 }
 
 
+# gamma = 0.90
+# alpha = 0.1
+# epsilon = 0.1
+# lam = 0.1
+
+# q, iters = true_online_sarsa(gamma, alpha, lam, epsilon, v_star, 1000)
+# est_pi = get_greedy_pi(q)
+# print_policy(est_pi)
+# print_v(get_v(q, get_pi(q)))
+
+# gamma = 0.90
+# alpha = 0.05
+# epsilon = 0.3
+# lam = 0.1
+
+# 2500 episodes, epsilon = 0.1, gamma = 0.9, alpha = 0.1, lamda = 0.1
 gamma = 0.90
-alpha = 0.1
+alpha = 0.05
 epsilon = 0.1
-lam = 0.1
+lam = 0.08
 
-q, iters = true_online_sarsa(gamma, alpha, lam, epsilon, v_star, 1000)
-est_pi = get_greedy_pi(q)
-print_policy(est_pi)
-print_v(get_v(q, get_pi(q)))
+min_actions = 10000000
+min_episodes = 10000000
+a_ep_plots = []
+v_diffs = []
+qs = []
+for i in range(1):
+    print(i)
+    q, iters, to_plot, v_diff = true_online_sarsa(gamma, alpha, lam, epsilon, v_star, 2500)
+    print(iters)
+    qs.append(q)
+    min_actions = min(min_actions, len(to_plot))
+    a_ep_plots.append(to_plot)
+    min_episodes = min(min_episodes, len(v_diff))
+    v_diffs.append(v_diff)
 
-# x = np.zeros((5, 5, 4))
-# x[3][2][0] = 1
+plot_data_1 = []
+plot_data_2 = []
 
+for plot in a_ep_plots:
+    plot_data_1.append(plot[:min_actions])
 
-# print(get_x(3, 2, 0))
-# print(x.flatten())
+for plot in v_diffs:
+    plot_data_2.append(plot[:min_episodes])
+
+avg_q = np.mean(qs, axis = 0)
+pi = get_greedy_pi(avg_q)
+print_policy(pi)
+v_est = get_v(avg_q, get_pi(avg_q))
+print("V_star: ")
+print_v(v_star)
+print("Estimated V: ")
+print_v(v_est)
+plt.figure(0)
+plt.plot(np.mean(np.array(plot_data_1), axis = 0))
+plt.xlabel("Number of actions")
+plt.ylabel("Number of episodes")
+plt.figure(1)
+plt.plot(np.mean(np.array(plot_data_2), axis = 0))
+plt.xlabel("Number of episodes")
+plt.ylabel("MSE")
+plt.show()
