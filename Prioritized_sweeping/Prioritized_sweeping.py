@@ -42,6 +42,7 @@ class PrioritizedSweeping():
         # self.policy = np.array([[(0, 1) for j in range(self.num_cols)] for i in range(self.num_rows)])
         self.test_pol = np.array([[[1/len(self.actions) for k in range(len(self.actions))] for j in range(self.num_cols)] for i in range(self.num_rows)])
         self.q = np.array([[[0.0 for a in range(len(self.actions))] for j in range(self.num_cols)] for i in range(self.num_rows)])
+        
         self.model = np.array([[[(0.0, (0, 0)) for a in range(len(self.actions))] for j in range(self.num_cols)] for i in range(self.num_rows)]) # this is a 3D matrix, with each value being a pair (reward, state)
         self.pq = PriorityQueue()
         self.predecessor = defaultdict(list, {k : [] for k in self.states})
@@ -487,7 +488,7 @@ class PrioritizedSweeping():
         # plt.ylabel("Episodes")
         # # eight = mlines.Line2D([], [], color='c', marker='s', ls='', label='')
         # nine = mlines.Line2D([], [], color='k', marker='s', ls='', label='mean')
-        # plt.legend(handles=[nine])
+        # plt.legend(handles=[nine]) 
 
 
 
