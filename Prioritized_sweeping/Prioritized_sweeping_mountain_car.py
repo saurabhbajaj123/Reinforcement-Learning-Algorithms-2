@@ -58,8 +58,8 @@ class PrioritizedSweeping:
         return (x_t_prime, v_t_prime)
     
     def pi_func(self, pi, s):
-        row = np.digitize([s[0]], self.bins_x)[0]
-        col = np.digitize([s[1]], self.bins_v)[0]
+        row = s[0]
+        col = s[1]
         chosen_action = np.random.choice(len(self.actions), 1, p=pi[row][col])
         return self.actions[chosen_action[0]]
 
@@ -105,8 +105,8 @@ class PrioritizedSweeping:
 
 
     def e_soft_policy_update(self, s, eps):
-        row = np.digitize([s[0]], self.bins_x)[0]
-        col = np.digitize([s[1]], self.bins_v)[0]
+        row = s[0]
+        col = s[1]
 
         best_a_list = []
         best_qsa = -float("inf")
@@ -125,73 +125,31 @@ class PrioritizedSweeping:
         np.put(self.test_pol[row][col], not_best_list, [remaining_prob]*len(not_best_list))
 
     def softmax_policy_update(self, s, sigma):
-        row = np.digitize([s[0]], self.bins_x)[0]
-        col = np.digitize([s[1]], self.bins_v)[0]
+        row = s[0]
+        col = s[1]
         p = sigma*self.q[row][col]
         self.test_pol[row][col] = np.exp(p - max(p))/sum(np.exp(p - max(p)))
 
 
     def update_q(self, s, s_prime, a, r, alpha):
-        # x_t_prime = np.digitize([x_t_prime], self.bins_x)[0]
-        # v_t_prime =
-
-        row = np.digitize([s[0]], self.bins_x)[0]
-        col = np.digitize([s[1]], self.bins_v)[0]
+        row = s[0]
+        col = s[1]
         index_a = self.actions.index(a)
-        # next_a = self.pi_func(pi=self.test_pol, s=s_prime)
-        next_row = np.digitize([s_prime[0]], self.bins_x)[0]  
-        next_col = np.digitize([s_prime[1]], self.bins_v)[0]
-        # index_next_a = self.actions.index(next_a)
+        next_row = s_prime[0]  
+        next_col = s_prime[1]
         self.q[row][col][index_a] = self.q[row][col][index_a] \
             + alpha * (r + (self.gamma * np.amax(self.q[next_row][next_col])) - self.q[row][col][index_a]) 
 
 
-    def qlearning(self, eps):
-        count = 0
-        num_actions = 0
-        num_episodes_list = []
-        num_actions_list = []
-        num_steps_list = []
-        while True:
-            count += 1
-            s = self.d0()
-            num_steps = 0
-            while (s[0] != 0.5):
-                num_steps += 1
-                num_actions += 1
-                a = self.pi_func(self.test_pol, s)
-                s_prime = self.trans_func(s, a)
-                r = self.reward_function(s)
-
-                self.update_q(s, s_prime, a, r, self.alpha)
-
-                # self.e_soft_policy_update(s=s, eps=min(eps, 1/count))
-                self.softmax_policy_update(s=s, sigma=count)
-
-                s = s_prime
-            # print()
-            # print("episode = {}, num actions till now = {}, num steps for this episode = {}".format(count, num_actions, num_steps))
-            num_episodes_list.append(count)
-            num_actions_list.append(num_actions)
-            num_steps_list.append(num_steps)
-            
-            self.v = np.max(self.q, axis=2)
-
-            if count > 150:
-                break
-                
-        return count, num_episodes_list, num_actions_list, num_steps_list
-
-
     def model_update(self, s, a, s_prime, r):
-        row = np.digitize([s[0]], self.bins_x)[0]
-        col = np.digitize([s[1]], self.bins_v)[0]
+        row = s[0]
+        col = s[1]
         a_index = self.actions.index(a)
         self.model[row][col][a_index] = (r, s_prime)
         
     def get_rs_from_model(self, s, a):
-        row = np.digitize([s[0]], self.bins_x)[0]
-        col = np.digitize([s[1]], self.bins_v)[0]
+        row = s[0]
+        col = s[1]
         a_index = self.actions.index(a)
         return self.model[row][col][a_index]
 
@@ -203,15 +161,19 @@ class PrioritizedSweeping:
             self.predecessor[s].append((s_, a_))
 
     def get_priority(self, s, s_prime, r, a):
-        row = np.digitize([s[0]], self.bins_x)[0]
-        col = np.digitize([s[1]], self.bins_v)[0]
+        row = s[0]
+        col = s[1]
         index_a = self.actions.index(a)
-        next_row = np.digitize([s_prime[0]], self.bins_x)[0]  
-        next_col = np.digitize([s_prime[1]], self.bins_v)[0]
+        next_row = s_prime[0]  
+        next_col = s_prime[1]
 
         priority = abs(r + (self.gamma * np.amax(self.q[next_row][next_col])) - self.q[row][col][index_a])
         return priority
 
+    def discretize_states(self, s):
+        row = np.digitize([s[0]], self.bins_x)[0]
+        col = np.digitize([s[1]], self.bins_v)[0]
+        return (row, col)
 
     def prio_sweep(self, eps, threshold, n_iters, break_iters, running_average_length):
         count = 0
@@ -222,7 +184,8 @@ class PrioritizedSweeping:
         prev_v_list = []
         num_steps_list = []
         while True:
-            # print(count)
+            x_visited = []
+            print(count)
             count += 1
             # alpha = max(alpha*0.999, 0.0001)
             num_steps = 0
@@ -231,45 +194,51 @@ class PrioritizedSweeping:
             prev_v_list.append(copy.deepcopy(self.v))
 
             s = self.d0()
-            while (s[0] != 0.5):
+            while (s[0] != 0.5) and num_steps < 1000:
+                x_visited.append(s[0])
                 num_steps += 1
                 num_actions += 1
-                a = self.pi_func(self.test_pol, s)
-                s_prime = self.trans_func(s, a)
-                self.update_leading_to_s(s, a, s_prime)
+                dis_s = self.discretize_states(s)
+                a = self.pi_func(self.test_pol, dis_s)
 
+                s_prime = self.trans_func(s, a)
+                # print(s_prime)
+                dis_s_prime = self.discretize_states(s_prime)
+                
                 r = self.reward_function(s)
 
-                self.model_update(s, a, s_prime, r)
+                self.update_leading_to_s(dis_s, a, dis_s_prime)
+                
+                self.model_update(dis_s, a, dis_s_prime, r)
 
-                priority = self.get_priority(s, s_prime, r, a)
+                priority = self.get_priority(dis_s, dis_s_prime, r, a)
 
                 if priority > threshold:
-                    self.pq.put((-priority, s, a))
+                    self.pq.put((-priority, dis_s, a))
 
                 s = s_prime
 
                 for itr_count in range(n_iters):
                     if self.pq.empty():
                         break
-                    _, s1, a1 = self.pq.get()
+                    _, dis_s1, a1 = self.pq.get()
 
-                    r1, s_prime1 = self.get_rs_from_model(s1, a1)
-                    self.update_q(s1, s_prime1, a1, r1, alpha)
+                    r1, dis_s_prime1 = self.get_rs_from_model(dis_s1, a1)
+                    self.update_q(dis_s1, dis_s_prime1, a1, r1, alpha)
 
                     # eps=max(eps*0.999, 0.0001)
+                    # self.e_soft_policy_update(s=dis_s1, eps=eps)
+                    self.softmax_policy_update(s=dis_s1, sigma=count)
 
-                    # self.e_soft_policy_update(s=s1, eps=eps)
-                    self.softmax_policy_update(s=s1, sigma=count)
-
-                    for s_, a_ in self.leading_to_s(s1):
-                        r_, _ = self.get_rs_from_model(s_, a_)
+                    for dis_s_, a_ in self.leading_to_s(dis_s1):
+                        r_, _ = self.get_rs_from_model(dis_s_, a_)
                         
-                        priority_ = self.get_priority(s_, s1, r_, a_)
+                        priority_ = self.get_priority(dis_s_, dis_s1, r_, a_)
                         
                         if priority_ > threshold:
-                            self.pq.put((-priority_, s_, a_))
-            
+                            self.pq.put((-priority_, dis_s_, a_))
+                plt.plot(x_visited)
+                plt.pause(0.0001)
             num_episodes_list.append(count)
             num_actions_list.append(num_actions)
             num_steps_list.append(num_steps)
@@ -285,11 +254,11 @@ class PrioritizedSweeping:
 
 def main():
     gamma = 0.9
-    alpha = 0.05
+    alpha = 0.5
     delta = 0.1
     sigma = 1
     num_bins = 4
-    eps = 0.05
+    eps = 0.04
 
     # gamma = 0.9
     # alpha = 0.1
@@ -297,11 +266,11 @@ def main():
     # sigma = 1
     threshold = 1e-5
     # eps = 0.1
-    n_iters = 10
-    break_iters = 60
+    n_iters = 5
+    break_iters = 10
     running_average_length = 200
 
-    for num_bins in range(4, 5):
+    for num_bins in range(5, 6):
         num_acts_mean_list = []
         num_steps_mean = []
         J = []
