@@ -53,8 +53,10 @@ def sarsa(gamma, alpha, epsilon, max_iters, rows = 4, columns = 12):
     iters = 0
     q = np.zeros((rows, columns, 4)) # q -> [["AU", "AR", "AD", "AL"]], 0 - AU 1 - AR, 2 - AD, 3 - AL 
     episodes_time = []
+    sum_of_rewards = []
     while True:
         iters += 1
+        sum_r = 0
         # if (iters % 500) == 0 and epsilon > 0.10:
         #     epsilon -= 0.05
         #     print(epsilon)
@@ -67,6 +69,8 @@ def sarsa(gamma, alpha, epsilon, max_iters, rows = 4, columns = 12):
             # print(q)
             a = choose_action(q, s, epsilon)
             next_state, reward = observe(s, a)
+            sum_r += reward
+            sum_of_rewards.append(sum_r)
             next_action = np.argmax(q[next_state])
             q[s][a] += alpha * (reward + gamma * q[next_state][next_action] - q[s][a])
             episodes_time.append(iters)
@@ -77,7 +81,6 @@ def sarsa(gamma, alpha, epsilon, max_iters, rows = 4, columns = 12):
         # diff = np.abs(old_q - q)
         # if np.amax(diff) < 0.001:
             # break
-        print("episode ended yaaay")
         if iters == max_iters:
             break
 

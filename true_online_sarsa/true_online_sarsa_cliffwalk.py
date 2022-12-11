@@ -56,6 +56,7 @@ def true_online_sarsa(gamma, alpha, lam, epsilon, max_iters, rows = 4, columns =
     q = np.zeros((rows, columns, actions)) # q -> [["AU", "AR", "AD", "AL"]], 0 - AU 1 - AR, 2 - AD, 3 - AL 
     w = np.random.rand((rows * columns * actions))
     episodes_time = []
+    sum_of_rewards = []
     while True:
         if iters == max_iters:
             break
@@ -70,10 +71,12 @@ def true_online_sarsa(gamma, alpha, lam, epsilon, max_iters, rows = 4, columns =
         Q_old = 0
         z = np.zeros((rows * columns * actions))
         episodes_time.append(iters)
+        sum_r = 0
         while s != goal_state:
             # print(s)
             episodes_time.append(iters)
             next_state, reward = observe(s, a)
+            sum_r += reward
             next_action = choose_action(q, next_state, epsilon)
             next_x = get_x(next_state, next_action)
             # print("x_shape: ")
@@ -95,9 +98,9 @@ def true_online_sarsa(gamma, alpha, lam, epsilon, max_iters, rows = 4, columns =
             # q[s[0]][s[1]][a] += alpha * (reward + gamma * q[next_state[0]][next_state[1]][next_action] - q[s[0]][s[1]][a])
         # print("goal state reached yaay!")
         iters += 1
-        
+        sum_of_rewards.append(sum_r)
 
-    return q, iters, episodes_time
+    return q, iters, episodes_time, sum_of_rewards
 
 def get_greedy_pi(q):
     pi = {}
@@ -176,30 +179,30 @@ epsilon = 0.1
 lam = 0.05
 
 
-q, iters, to_plot = true_online_sarsa(gamma, alpha, lam, epsilon, 10000)
-pi = get_greedy_pi(q)
-print_policy(pi)
-print(get_pi(q))
+# q, iters, to_plot = true_online_sarsa(gamma, alpha, lam, epsilon, 10000)
+# pi = get_greedy_pi(q)
+# print_policy(pi)
+# print(get_pi(q))
 
 # gamma = 0.90
 # alpha = 0.05
 # epsilon = 0.1
 # lam = 0.08
-'''
+
 min_actions = 10000000
 min_episodes = 10000000
 a_ep_plots = []
-v_diffs = []
+sum_of_rewards = []
 qs = []
 for i in range(1):
     print(i)
-    q, iters, to_plot = true_online_sarsa(gamma, alpha, lam, epsilon, 2500)
+    q, iters, a_ep, sum_of_reward = true_online_sarsa(gamma, alpha, lam, epsilon, 2500)
     print(iters)
     qs.append(q)
-    min_actions = min(min_actions, len(to_plot))
-    a_ep_plots.append(to_plot)
-    min_episodes = min(min_episodes, len(v_diff))
-    v_diffs.append(v_diff)
+    min_actions = min(min_actions, len(a_ep))
+    a_ep_plots.append(a_ep)
+    min_episodes = min(min_episodes, len(sum_of_reward))
+    sum_of_rewards.append(sum_of_reward)
 
 plot_data_1 = []
 plot_data_2 = []
@@ -207,7 +210,7 @@ plot_data_2 = []
 for plot in a_ep_plots:
     plot_data_1.append(plot[:min_actions])
 
-for plot in v_diffs:
+for plot in sum_of_rewards:
     plot_data_2.append(plot[:min_episodes])
 
 avg_q = np.mean(qs, axis = 0)
@@ -223,6 +226,5 @@ plt.ylabel("Number of episodes")
 plt.figure(1)
 plt.plot(np.mean(np.array(plot_data_2), axis = 0))
 plt.xlabel("Number of episodes")
-plt.ylabel("MSE")
+plt.ylabel("Sum of Rewards")
 plt.show()
-'''
