@@ -60,7 +60,8 @@ def true_online_sarsa(gamma, alpha, lam, epsilon, v_star, max_iters):
         # if (iters % 2000) == 0 and epsilon > 0.10:
         #     epsilon -= 0.05
         #     print(epsilon)
-        epsilon = min(epsilon, 20*epsilon/iters)
+        epsilon = min(epsilon, 30 * epsilon/iters)
+        alpha = min(alpha, 70 * alpha/iters)
         # start an episode
         start_state = random.sample(valid_states, 1)[0]
         s = start_state
@@ -197,9 +198,9 @@ pi_star = {
 
 # 2500 episodes, epsilon = 0.1, gamma = 0.9, alpha = 0.1, lamda = 0.1
 gamma = 0.90
-alpha = 0.05
+alpha = 0.1
 epsilon = 0.1
-lam = 0.08
+lam = 0.1
 
 min_actions = 10000000
 min_episodes = 10000000
@@ -233,12 +234,16 @@ print("V_star: ")
 print_v(v_star)
 print("Estimated V: ")
 print_v(v_est)
-plt.figure(0)
-plt.plot(np.mean(np.array(plot_data_1), axis = 0))
-plt.xlabel("Number of actions")
-plt.ylabel("Number of episodes")
-plt.figure(1)
-plt.plot(np.mean(np.array(plot_data_2), axis = 0))
-plt.xlabel("Number of episodes")
-plt.ylabel("MSE")
-plt.show()
+print("MSE: ")
+print(np.sum(np.square(v_est - v_star))/23)
+print("Max Norm: ")
+print(np.amax(np.abs(v_est - v_star)))
+# plt.figure(0)
+# plt.plot(np.mean(np.array(plot_data_1), axis = 0))
+# plt.xlabel("Number of actions")
+# plt.ylabel("Number of episodes")
+# plt.figure(1)
+# plt.plot(np.mean(np.array(plot_data_2), axis = 0))
+# plt.xlabel("Number of episodes")
+# plt.ylabel("MSE")
+# plt.show()
