@@ -61,6 +61,7 @@ def true_online_sarsa(gamma, alpha, lam, epsilon, max_iters, bins):
     iters = 0
     q = np.zeros((bins, bins, 3)) # q -> [["-1", "0", "1"]], 0 - -1, 1 - 0, 2 - 1
     w = np.random.rand((bins * bins * 3))
+    episodes_time = []
     steps_arr = []
     while True:
         # print(iters)
@@ -75,7 +76,9 @@ def true_online_sarsa(gamma, alpha, lam, epsilon, max_iters, bins):
         x = get_x(dis_s, a, bins)
         Q_old = 0
         z = np.zeros((bins * bins * 3))
+        episodes_time.append(iters)
         while (dis_s[0] != bins - 1) and steps < 1001:
+            episodes_time.append(iters)
             steps += 1
             next_state, reward = observe(s, a, bins)
             dis_next_state = discretize(next_state, bins)
@@ -104,7 +107,7 @@ def true_online_sarsa(gamma, alpha, lam, epsilon, max_iters, bins):
         iters += 1
         
 
-    return q, iters, steps_arr
+    return q, iters, episodes_time, steps_arr
 
 def get_pi(q, bins):
     pi = {}
@@ -135,6 +138,40 @@ def get_v(q, pi, bins):
                 v[i][j] += probs[k] * q_s[k]
     return v
 
+def evaluate_policy(q, bins):
+    eval = []
+    for i in range(10):
+        s = (np.random.uniform(-0.6, -0.4), 0)
+        ds = discretize(s, bins)
+        count = 0
+        while ds[0] != bins - 1 and count <= 1000:
+            count += 1
+            a = choose_action(q, ds, epsilon=0)
+            s_prime, _ = observe(s, a, bins)
+            ds_prime = discretize(s_prime, bins)
+            s = s_prime
+            ds = ds_prime
+        eval.append(count)
+
+    for i in eval:
+        if i > 1000:
+            eval.remove(i)
+    return eval
+
+# gamma = 0.90
+# alpha = 0.05
+# epsilon = 0.1
+# lam = 0.08
+# bins = 15
+
+# q, iters, steps_arr = true_online_sarsa(gamma, alpha, lam, epsilon, 2000, bins)
+# # print(steps_arr)
+# steps_reached = []
+# for i in steps_arr:
+#     if i < 1000:
+#         steps_reached.append(i)
+# print("Mean steps taken (during training): " + str(np.mean(steps_reached)))
+
 
 gamma = 0.90
 alpha = 0.05
@@ -142,39 +179,40 @@ epsilon = 0.1
 lam = 0.08
 bins = 15
 
-q, iters, steps_arr = true_online_sarsa(gamma, alpha, lam, epsilon, 2000, bins)
-# print(steps_arr)
-steps_reached = []
-for i in steps_arr:
-    if i < 1000:
-        steps_reached.append(i)
-print("Mean steps taken (during training): " + str(np.mean(steps_reached)))
+min_actions = 10000000
+min_episodes = 3000
+a_ep_plots = []
+steps_arrs = []
+qs = []
+for i in range(2):
+    print(i)
+    q, iters, to_plot, steps_arr = true_online_sarsa(gamma, alpha, lam, epsilon, 5000, bins)
+    qs.append(q)
+    print(iters)
+    min_actions = min(min_actions, len(to_plot))
+    a_ep_plots.append(to_plot)
+    min_episodes = min(min_episodes, iters)
+    steps_arrs.append(steps_arr)
 
-eval = []
-for i in range(10):
-    s = (np.random.uniform(-0.6, -0.4), 0)
-    ds = discretize(s, bins)
-    count = 0
-    while ds[0] != bins - 1 and count <= 1000:
-        count += 1
-        a = choose_action(q, ds, epsilon=0)
-        s_prime, _ = observe(s, a, bins)
-        ds_prime = discretize(s_prime, bins)
-        s = s_prime
-        ds = ds_prime
-    eval.append(count)
+plot_data_1 = []
+plot_data_2 = []
 
-for i in eval:
-    if i > 1000:
-        eval.remove(i)
-print(eval)
+for plot in a_ep_plots:
+    plot_data_1.append(plot[:min_actions])
+
+for plot in steps_arrs:
+    plot_data_2.append(plot[:min_episodes])
+
+avg_q = np.mean(qs, axis = 0)
+eval = evaluate_policy(avg_q, bins)
 print("Mean steps taken (during eval): " + str(np.mean(eval)))
-# est_pi = get_pi(q, bins)
-# print(get_v(q, est_pi, bins))
 
-# x = np.zeros((5, 5, 4))
-# x[3][2][0] = 1
-
-
-# print(get_x(3, 2, 0))
-# print(x.flatten())
+plt.figure(0)
+plt.plot(np.mean(np.array(plot_data_1), axis = 0))
+plt.xlabel("Number of actions")
+plt.ylabel("Number of episodes")
+plt.figure(1)
+plt.errorbar(np.arange(3000)[::15], np.mean(plot_data_2, axis = 0)[::15],yerr=np.std(plot_data_2, axis = 0)[::15], fmt = '', capsize=1)
+plt.xlabel("Number of episodes")
+plt.ylabel("Number of steps needed to reach goal state")
+plt.show()

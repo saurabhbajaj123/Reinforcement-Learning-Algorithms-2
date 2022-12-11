@@ -21,23 +21,15 @@ class PrioritizedSweeping():
         self.delta = delta
 
 
-        self.pi_star = [[(0, 1), (0, 1), (0, 1), (1, 0), (1, 0)],
-                   [(0, 1), (0, 1), (0, 1), (1, 0), (1, 0)],
-                   [(-1, 0), (-1, 0), (-1, 0), (1, 0), (1, 0)],
-                   [(-1, 0), (-1, 0), (-1, 0), (1, 0), (1, 0)],
-                   [(-1, 0), (-1, 0), (0, 1), (0, 1), (-1, 0)]]
-        self.v_star = [[4.0187,4.5548,5.1576,5.8337,6.4553],
-                       [4.3716,5.0324,5.8013,6.6473,7.3907],
-                       [3.8672,4.39,  0.0,   7.5769,8.4637],
-                       [3.4183,3.8319,0.0,   8.5738,9.6946],
-                       [2.9978,2.9309,6.0733,9.6946,0.]]
-
         # self.pi_esoft = collections.defaultdict(list) # key: state, value: list(best action)
         # for s in self.states:
         #     self.pi_esoft[s] = self.actions
 
 
         self.states = [(i, j) for j in range(self.num_cols) for i in range(self.num_rows)]
+        self.cliff_states = [(3, j) for j in range(1, 11)]
+        self.goal_state = (3, 11)
+        self.start_state = (3, 0)
         self.v = np.array([[0.0 for j in range(self.num_cols)] for i in range(self.num_rows)])
         # self.policy = np.array([[(0, 1) for j in range(self.num_cols)] for i in range(self.num_rows)])
         self.test_pol = np.array([[[1/len(self.actions) for k in range(len(self.actions))] for j in range(self.num_cols)] for i in range(self.num_rows)])
@@ -61,18 +53,10 @@ class PrioritizedSweeping():
                 for action in self.actions:
                     
                     prob = 0
-                    if ((next_state[0] < 0) or (next_state[1] < 0) or (next_state[0] > 4) or (next_state[1] > 4)):
+                    if ((next_state[0] < 0) or (next_state[1] < 0) or (next_state[0] > 3) or (next_state[1] > 11)):
                         continue
-                    if ((state[0] == 2) and (state[1] == 2)) or ((state[0] == 3) and (state[1] == 2)):
-                        prob = 0
-                        p[state, next_state].append(prob)
-                        continue
-                    if ((next_state[0] == 2) and (next_state[1] == 2)) or ((next_state[0] == 3) and (next_state[1] == 2)):
-                        prob = 0
-                        p[state, next_state].append(prob)
-                        continue
-                    if ((state[0] == 4) and (state[1] == 4)):
-                        if ((next_state[0] == 4) and (next_state[1] == 4)):
+                    if state == self.goal_state:
+                        if next_state == self.goal_state:
                             prob = 1
                         else:
                             prob = 0
@@ -86,42 +70,7 @@ class PrioritizedSweeping():
                     #     p[state, next_state].append(prob)
                     #     continue
                     if action == next_direction:
-                        prob = 0.8
-                    elif (next_direction == self.actions[(self.actions.index(action) + 1) % 4]) or (next_direction == self.actions[(self.actions.index(action) - 1) % 4]):
-                        prob = 0.05
-                    elif (next_direction == (0,0)):
-                        prob = 0.1
-                        if ((state[0] + action[0]) == 2 and (state[1] + action[1]) == 2): # going into the obstacle directly when moving towards the obstacle
-                            prob += 0.8
-                        if ((state[0] + action[0]) == 3 and (state[1] + action[1]) == 2):# going into the obstacle directly when moving towards the obstacle
-                            prob += 0.8
-                        if (((state[0] + action[0]) < 0)  or ((state[1] + action[1]) < 0) or ((state[0] + action[0]) > 4)  or ((state[1] + action[1]) > 4)): # going directly into the wall
-                            prob += 0.8
-                        if (((state[0] + self.actions[(self.actions.index(action) + 1) % 4][0]) == 2) and ((state[1] + self.actions[(self.actions.index(action) + 1) % 4][1]) == 2)): # going into the obstacle mistakenly towrads right
-                            prob += 0.05
-                        if (((state[0] + self.actions[(self.actions.index(action) + 1) % 4][0]) == 3) and ((state[1] + self.actions[(self.actions.index(action) + 1) % 4][1]) == 2)):# going into the obstacle 
-                            prob += 0.05
-                        if (((state[0] + self.actions[(self.actions.index(action) - 1) % 4][0]) == 2) and ((state[1] + self.actions[(self.actions.index(action) - 1) % 4][1]) == 2)): # going into the obstacle
-                            prob += 0.05
-                        if (((state[0] + self.actions[(self.actions.index(action) - 1) % 4][0]) == 3) and ((state[1] + self.actions[(self.actions.index(action) - 1) % 4][1]) == 2)):# going into the obstacle
-                            prob += 0.05
-                        if ((state[0] + self.actions[(self.actions.index(action) + 1) % 4][0]) < 0): # going into the wall
-                            prob += 0.05
-                        if ((state[1] + self.actions[(self.actions.index(action) + 1) % 4][1]) < 0): # going into the wall
-                            prob += 0.05
-                        if ((state[0] + self.actions[(self.actions.index(action) + 1) % 4][0]) > 4): # going into the wall
-                            prob += 0.05
-                        if ((state[1] + self.actions[(self.actions.index(action) + 1) % 4][1]) > 4): # going into the wall
-                            prob += 0.05
-                        if ((state[0] + self.actions[(self.actions.index(action) - 1) % 4][0]) < 0): # going into the wall
-                            prob += 0.05
-                        if ((state[1] + self.actions[(self.actions.index(action) - 1) % 4][1]) < 0): # going into the wall
-                            prob += 0.05
-                        if ((state[0] + self.actions[(self.actions.index(action) - 1) % 4][0]) > 4): # going into the wall
-                            prob += 0.05
-                        if ((state[1] + self.actions[(self.actions.index(action) - 1) % 4][1]) > 4): # going into the wall
-                            prob += 0.05
-                    
+                        prob = 1
                     # print("state = {}, action = {}, next_state = {}, prob = {}".format(state, action, next_state, round(prob, 3)))
                     p[state, next_state].append(round(prob, 3))
         # print(len(p))
@@ -136,86 +85,28 @@ class PrioritizedSweeping():
         Returns:
             next state (tuple)
         """
-        if s == (4, 4): return s
-        rand = random.uniform(0, 1)
+        if s == self.goal_state: return s
         s_prime = (s[0] + a[0], s[1] + a[1])
-
-        # if rand < 0.8:
-        #     s_prime = (s[0] + a[0], s[1] + a[1])
-        # elif 0.8 < rand <  0.85:
-        #     a = self.actions[(self.actions.index(a) + 1) % 4]
-        #     s_prime = (s[0] + a[0], s[1] + a[1])
-        # elif  0.85 < rand <  0.9:
-        #     a = self.actions[(self.actions.index(a) - 1) % 4]
-        #     s_prime = (s[0] + a[0], s[1] + a[1])
-        # else:
-        #     s_prime = s
-        if (s_prime == (2,2)) or (s_prime == (3,2)) or (s_prime[0] < 0) or (s_prime[0] > 4) or (s_prime[1] < 0) or (s_prime[1] > 4):
+        if (s_prime[0] < 0) or (s_prime[0] > 3) or (s_prime[1] < 0) or (s_prime[1] > 11):
             s_prime = s
+        if s_prime in self.cliff_states:
+            s_prime = self.start_state
         return s_prime
 
-
-
-
-
     def reward(self, s, a, s_prime):
-        if (s == (4, 4)):
-            return 0
-        elif s_prime == (4, 4):
-            return 10
-        elif s_prime == (4, 2):
-            return -10
-        # elif s_prime == (0, 2):
-        #     # return 5
-        #     return 4.4844 # found using binary search
+        if s_prime in self.cliff_states:
+            return -100
         else:
-            return 0
+            return -1
 
     def d0(self):
         states = self.states.copy()
-        states.remove((2,2))
-        states.remove((3,2))
-        # states.remove((4,4))
+        for j in range(1, 11):
+            states.remove((3, j))
         random_index = random.randint(0,len(states)-1)
         return states[random_index]
 
-
-
-
-    def run(self, threshold):
-        # self.v = np.array([[0 for j in range(5)] for i in range(5)])
-        p = self.transition_function()
-        print(p)
-        count = 0
-        while True:
-            count += 1
-            delta = 0
-            v_old = np.copy(self.v)
-            # print(np.amax(v_old))
-            for s in self.states:
-                max_val = -float("inf")
-                max_a = None
-                for i, a in enumerate(self.actions):
-                    val = 0
-                    for s_prime in self.states:
-                        
-                        # print(s, s_prime)
-                        try:
-                            # print(v_old[s_prime])
-                            val += p[s, s_prime][i]*(self.reward(s, a, s_prime) + (self.gamma*v_old[s_prime]))
-                        except:
-                            continue
-                    # print("val = {}".format(val))
-                    if max_val < val:
-                        max_val = val
-                        max_a = i
-                # if (s == (1, 1)): print("val = {}".format(val))
-                self.v[s] = round(max_val, 4)
-                self.policy[s] = self.actions[max_a]
-            delta = max(delta, np.amax(abs(self.v - v_old)))
-            if delta < threshold:
-                break
-        return self.v, self.policy, count
+    
 
     def pi_func(self, pi, s):
         """
@@ -226,24 +117,6 @@ class PrioritizedSweeping():
 
         return pi[s[0]][s[1]]
     
-
-    def v_star_func(self, s):
-        # self.gamma = 0.9
-        # v_star, pi_star, iterations = self.run(0.0001)
-        return self.v_star[s[0]][s[1]]
-
-    def generateEpisode(self, pi):
-        trajectory = []
-        s = self.d0()
-        while(s != (4, 4)):
-            a = self.pi_func(pi, s)
-            s_prime = self.trans_func(s, a)
-            r = self.reward(s, a, s_prime)
-            trajectory.append((s, r))
-            s = s_prime
-        trajectory.append(((4,4), 0))
-        return trajectory
-
     def pi_esoft_func(self, pi, s, eps):
         """
         Args: 
@@ -282,23 +155,6 @@ class PrioritizedSweeping():
             # print("else condition")
             # print((eps/len(A)))
             return (eps/len(A))
-
-    def generateEpisode_esoft(self, pi, eps):
-        """
-        Args:
-            pi = dictionary key = states, value = list of actions
-            eps
-        """
-        trajectory = []
-        s = self.d0()
-        while(s != (4, 4)):
-            a = self.pi_esoft_func(pi, s, eps)
-            s_prime = self.trans_func(s, a)
-            r = self.reward(s, a, s_prime)
-            trajectory.append(((s, a), r))
-            s = s_prime
-        trajectory.append((((4,4), (0, 1)), 0))
-        return trajectory
     
     def e_soft_policy_update(self, s, eps):
         row = s[0]
@@ -366,7 +222,7 @@ class PrioritizedSweeping():
 
             s = self.d0()
             # print(s)
-            while s != (4, 4):
+            while s != self.goal_state:
                 # print("state = {}".format(s))
                 a = self.pi_esoft_func(self.test_pol, s, eps)
                 s_prime = self.trans_func(s, a)
@@ -374,7 +230,6 @@ class PrioritizedSweeping():
                 r = self.reward(s, a, s_prime)
 
                 self.model_update(s, a, s_prime, r)
-                
 
                 row = s[0]
                 col = s[1]
@@ -409,6 +264,10 @@ class PrioritizedSweeping():
                     index_a = self.actions.index(a1)
                     next_row = s_prime1[0] 
                     next_col = s_prime1[1]
+                    # print(row)
+                    # print(col)
+                    # print(next_row)
+                    # print(next_col)
                     # if row == 2 and col == 0: 
                     #     print(self.q[row][col])
                     #     print(self.test_pol[row][col])
@@ -417,6 +276,7 @@ class PrioritizedSweeping():
 
                     self.q[row][col][index_a] = self.q[row][col][index_a] \
                         + alpha * (r1 + (self.gamma * np.amax(self.q[next_row][next_col])) - self.q[row][col][index_a]) 
+                    
 
                     eps=max(eps*0.999, 0.0001)
                     self.e_soft_policy_update(s=s1, eps=eps)
@@ -434,6 +294,7 @@ class PrioritizedSweeping():
                         next_col_ = s1[1]
 
                         priority_ = abs(r_ + (self.gamma * np.amax(self.q[next_row_][next_col_])) - self.q[row_][col_][index_a_])
+
                         # print(priority_, s_, a_, s1)
                         if priority_ > threshold:
                             self.pq.put((-priority_, s_, a_))
@@ -443,7 +304,7 @@ class PrioritizedSweeping():
             num_episodes_list.append(count)
             num_actions_list.append(num_actions)
             if count % 250 == 0:
-                mse.append(self.mse(self.v, self.v_star))
+                # mse.append(self.mse(self.v, self.v_star))
                 itr_number.append(count)
             if count > break_iters:
                 break
@@ -454,16 +315,16 @@ class PrioritizedSweeping():
             # print("shape = {}".format((self.v).shape))
             # if np.amax(abs(self.v - prev_v)) < self.delta:
             #     break            
-            max_norm.append(np.amax(abs(self.v - self.v_star)))
-            if np.amax(abs(self.v - self.v_star)) < self.delta:
-                break
-            if np.amax(abs(self.v - np.mean(prev_v_list, axis=0))) < self.delta:
-                break
-            plt.plot(max_norm)
-            plt.title("Max norm")
-            plt.xlabel("Iterations")
-            plt.ylabel("Max norm")
-            plt.pause(0.0001)
+            # max_norm.append(np.amax(abs(self.v - self.v_star)))
+            # if np.amax(abs(self.v - self.v_star)) < self.delta:
+                # break
+            # if np.amax(abs(self.v - np.mean(prev_v_list, axis=0))) < self.delta:
+            #     break
+            # plt.plot(max_norm)
+            # plt.title("Max norm")
+            # plt.xlabel("Iterations")
+            # plt.ylabel("Max norm")
+            # plt.pause(0.0001)
 
 
             # num_acts_mean_list.append(num_actions_list)
@@ -512,7 +373,8 @@ class PrioritizedSweeping():
         # # plt.ylabel("MSE")
         # plt.pause(0.0001)
         # plt.show()
-        return count, num_episodes_list, num_actions_list, mse, itr_number, max_norm[-1]
+        return count
+        # return count, num_episodes_list, num_actions_list, mse, itr_number, max_norm[-1]
     
 
 
@@ -522,11 +384,11 @@ class PrioritizedSweeping():
     def print_policy(self):
         print("Policy:") # Printing policy
         k = 0
-        for i in range(5):
-            for j in range(5):
-                if i == 4 and j == 4:
+        for i in range(self.num_rows):
+            for j in range(self.num_cols):
+                if (i, j) == self.goal_state:
                     print("G", end = " ")
-                elif (i == 2 or i == 3) and j == 2:
+                elif (i, j) in self.cliff_states:
                     print(" ", end = " ")
                 else:
                     ind = np.argmax(self.test_pol[i][j])
@@ -539,8 +401,6 @@ def main():
     def replace(inp, positions, char):
         for pos in positions:
             inp[pos] = char
-    obstacles = [(2,2), (3,2)]
-    goal = [(0,2), (4,4)]
 
     # gamma = 0.9
     # alpha = 0.1
@@ -608,28 +468,32 @@ def main():
     break_iters = 500
     running_average_length = 200
 
-    best_threshold = None
-    best_alpha = None
-    best_eps = None
-    best_sigma = None
-    best_v = None
-    best_n_iters = None
-    best_max_norm = float("inf")
-    for best_sigma in np.arange(1, 5, 1):
-        ps = PrioritizedSweeping(num_rows=5, num_cols=5, alpha=alpha, gamma=gamma, delta=delta)
-        count, num_episodes_list, num_actions_list, mse, itr_number, max_norm = ps.prio_sweep(eps=eps, threshold=threshold, n_iters=n_iters, break_iters=break_iters, running_average_length=running_average_length)
-        if best_max_norm > max_norm:
-            best_max_norm = max_norm
-            best_threshold = threshold
-            best_sigma = sigma
-            best_alpha = alpha
-            best_eps = eps
-            best_v = ps.v
-            best_n_iters = n_iters
-            best_break_iters = break_iters
-            ps.print_policy()
-        # print(ps.v)
-    print("alpha = {}, eps = {}, threshold = {}, sigma= {}, n_iters = {}, break_iters = {} max_norm = {}".format(best_alpha, best_eps, best_threshold, best_sigma, best_n_iters, break_iters, best_max_norm))
-    print(best_v)
+    ps = PrioritizedSweeping(num_rows=4, num_cols=12, alpha=alpha, gamma=gamma, delta=delta)
+    count = ps.prio_sweep(eps=eps, threshold=threshold, n_iters=n_iters, break_iters=break_iters, running_average_length=running_average_length)
+    ps.print_policy()   
+
+    # best_threshold = None
+    # best_alpha = None
+    # best_eps = None
+    # best_sigma = None
+    # best_v = None
+    # best_n_iters = None
+    # best_max_norm = float("inf")
+    # for best_sigma in np.arange(1, 5, 1):
+    #     ps = PrioritizedSweeping(num_rows=4, num_cols=12, alpha=alpha, gamma=gamma, delta=delta)
+    #     count, num_episodes_list, num_actions_list, mse, itr_number, max_norm = ps.prio_sweep(eps=eps, threshold=threshold, n_iters=n_iters, break_iters=break_iters, running_average_length=running_average_length)
+    #     if best_max_norm > max_norm:
+    #         best_max_norm = max_norm
+    #         best_threshold = threshold
+    #         best_sigma = sigma
+    #         best_alpha = alpha
+    #         best_eps = eps
+    #         best_v = ps.v
+    #         best_n_iters = n_iters
+    #         best_break_iters = break_iters
+    #         ps.print_policy()
+    #     # print(ps.v)
+    # print("alpha = {}, eps = {}, threshold = {}, sigma= {}, n_iters = {}, break_iters = {} max_norm = {}".format(best_alpha, best_eps, best_threshold, best_sigma, best_n_iters, break_iters, best_max_norm))
+    # print(best_v)
 if __name__ == '__main__':
     main()
