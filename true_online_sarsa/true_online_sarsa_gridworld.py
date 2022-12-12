@@ -80,26 +80,21 @@ def true_online_sarsa(gamma, alpha, lam, epsilon, v_star, max_iters):
             next_state, reward = observe(s, a)
             next_action = choose_action(q, next_state, epsilon)
             next_x = get_x(next_state, next_action)
-            # print("x_shape: ")
-            # print(x.shape)
-            # print("w shape: ")
-            # print(w.shape)
             Q = np.dot(w, x)
             next_Q = np.dot(w, next_x)
-            # print("Q': " + str(next_Q))
-            q[next_state[0]][next_state[1]][next_action] = next_Q 
+            # q[next_state[0]][next_state[1]][next_action] = next_Q 
             delta = reward + gamma * next_Q - Q
             z = gamma * lam * z + (1 - alpha * gamma * lam * (z.T) * x) * x
             w += alpha * (delta + Q - Q_old) * z - alpha * (Q - Q_old) * x
+            q[s][a] = np.dot(w, x)
+            q[next_state][next_action] = np.dot(w, next_x)
             Q_old = next_Q
             x = next_x
             a = next_action
             s = next_state
-            # print(q)
-            # q[s[0]][s[1]][a] += alpha * (reward + gamma * q[next_state[0]][next_state[1]][next_action] - q[s[0]][s[1]][a])
 
         v_est = get_v(q, get_pi(q))
-        mses.append(np.square(np.subtract(v_est, v_star)).mean())
+        mses.append(np.sum(np.square(v_est - v_star))/23)
         max_norms.append((np.amax(np.abs(v_est - v_star))))
         # if np.amax(v_diff) < 0.001:
         #     break
@@ -246,8 +241,9 @@ print("V_star: ")
 print_v(v_star)
 print("Estimated V: ")
 print_v(v_est)
+print(np.subtract(v_est, v_star))
 print("MSE: ")
-print(np.square(np.subtract(v_est, v_star)).mean())
+print(np.sum(np.square(v_est - v_star))/23)
 print("Max Norm: ")
 print(np.amax(np.abs(v_est - v_star)))
 plt.figure(0)
