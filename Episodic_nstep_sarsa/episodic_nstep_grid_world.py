@@ -36,18 +36,10 @@ class EpisodciNstep:
 
         self.states = [(i, j) for j in range(self.num_cols) for i in range(self.num_rows)]
         self.v = np.array([[0.0 for j in range(self.num_cols)] for i in range(self.num_rows)])
-        # self.policy = np.array([[(0, 1) for j in range(self.num_cols)] for i in range(self.num_rows)])
         self.test_pol = np.array([[[1/len(self.actions) for k in range(len(self.actions))] for j in range(self.num_cols)] for i in range(self.num_rows)])
         self.q = np.array([[[0.0 for a in range(len(self.actions))] for j in range(self.num_cols)] for i in range(self.num_rows)])
-        # self.test_policy = nn.Linear(self.num_rows*self.num_cols, len(self.actions))
-        # self.v = nn.Linear(self.num_rows*self.num_cols, 1)
-        # self.q = nn.Linear(self.num_rows*self.num_cols*len(self.actions), 1)
-
         self.w1 = torch.zeros((self.num_rows*self.num_cols*len(self.actions), 1), requires_grad=True, dtype=torch.float32)
         self.b1 = torch.zeros((1, 1), requires_grad=True, dtype=torch.float32)
-        
-        # torch.nn.init.normal_(self.w1, mean=0.0, std=1.0)
-        # torch.nn.init.normal_(self.b1, mean=0.0, std=1.0)
 
     def trans_func(self, s, a):
         """
@@ -59,7 +51,6 @@ class EpisodciNstep:
         """
         if s == (4, 4): return s
         rand = random.uniform(0, 1)
-        # s_prime = (s[0] + a[0], s[1] + a[1])
 
         if rand < 0.8:
             s_prime = (s[0] + a[0], s[1] + a[1])
@@ -115,56 +106,21 @@ class EpisodciNstep:
         Returns:
             action in state s (tuple)
         """
-        # print("probabilities = {}".format(pi[s[0]][s[1]]))
         probs = np.array([])
         for i, expl_a in enumerate(self.actions):
             probs = np.append(probs, (self.get_q_hat(s, expl_a)).tolist()[0][0])
-        # print((probs))
         a_star = list(np.argwhere(probs == max(probs)).flatten())
-        # print(a_star)
         prob = np.random.uniform()
-        # print(random.sample([0, 1, 2, 3], 1)[0])
-        # print(random.sample(a_star, 1)[0])
         if prob < epsilon:
             return self.actions[random.sample([0, 1, 2, 3], 1)[0]]
         else:
             return self.actions[random.sample(a_star, 1)[0]]
-        # print("probs = {}".format(probs))
-        probs = np.exp(probs)
-        probs /= sum(probs)
-        chosen_action = np.random.choice(4, 1, p=probs)
-        # print(chosen_action)
-        return self.actions[chosen_action[0]]
 
-    def e_soft_policy_update(self, s, eps):
-        row = s[0]
-        col = s[1]
-
-        best_a_list = []
-        best_qsa = -float("inf")
-        
-        for i, expl_a in enumerate(self.actions):
-            if best_qsa < self.q[row][col][i]:
-                best_qsa = self.q[row][col][i]
-                best_a_list = [i]
-            elif best_qsa == self.q[row][col][i]:
-                best_a_list.append(i)
-
-        not_best_list = list(set(range(4)) - set(best_a_list))
-        new_prob = max(0, ((1- eps)/len(best_a_list)) + (eps/len(self.actions)))
-        remaining_prob = (eps/len(self.actions))
-        np.put(self.test_pol[row][col], best_a_list, [new_prob]*len(best_a_list))
-        np.put(self.test_pol[row][col], not_best_list, [remaining_prob]*len(not_best_list))
-
-    def softmax_policy_update(self, s, sigma):
-        p = sigma*self.q[s[0]][s[1]]
-        self.test_pol[s[0]][s[1]] = np.exp(p - max(p))/sum(np.exp(p - max(p)))
 
     def get_x(self, state, action):
         x = torch.zeros(100)
         a_index = self.actions.index(action)
         index = state[0]*20 + state[1]*4 + a_index
-        # print("index = {}".format(index))
         if state != (4, 4):
             x[index] = 1
         return x
@@ -174,38 +130,22 @@ class EpisodciNstep:
         if s in set([(3,2), (2,2), (4,4)]):
             return torch.zeros(1,1)
         x = self.get_x(s, a)
-        # print(x)
         ans = torch.matmul(x, self.w1) + self.b1
-        # print(ans.tolist())
         return ans
 
     def calculate_reward(self, tau, n, T, r_trajectory):
         result = 0
         for i in range(tau+1, min(tau+n, T) + 1):
             result += (self.gamma**(i-tau-1)) * r_trajectory[i]
-            # if result > 0.0:
-            #     # print(result)
-        # print(result)
         return result
 
-    def print_policy(self):
-        print("Policy:") # Printing policy
-        k = 0
-        for i in range(5):
-            for j in range(5):
-                if i == 4 and j == 4:
-                    print("G", end = " ")
-                elif (i == 2 or i == 3) and j == 2:
-                    print(" ", end = " ")
-                else:
-                    ind = np.argmax(self.test_pol[i][j])
-                    print(self.arrows[ind], end=" ")
-                    k += 1
-            print()
 
     def episodic_n_step(self, n, alpha, eps):
         count = 0
         max_norm = []
+        mse_list = []
+        mse_itr_number = []
+        num_actions_list = []
         while True:
             s_trajectory = []
             a_trajectory = []
@@ -213,12 +153,16 @@ class EpisodciNstep:
             count += 1
             T = float("inf")
             t = 0
+            num_actions = 0
             s = self.d0()
             s_trajectory.append(s)
+            # eps = max(0.01, eps*(0.99**count))
+            # alpha = max(0.001, alpha*(0.99**count))
             a = self.pi_func(self.test_pol, s, eps)
             a_trajectory.append(a)
             r_trajectory.append(0.0)
             while True:
+                num_actions += 1
                 if t < T:
 
                     s_prime = self.trans_func(s, a)
@@ -235,82 +179,104 @@ class EpisodciNstep:
                 
                 s = s_prime
                 tau = t - n + 1
-                # print("tau = {}".format(tau))
 
                 if tau >= 0:
-                    # if s_trajectory[tau+n] in set([(3,2), (2,2), (4,4)]):
-                    #     continue
                     G = self.calculate_reward(tau, n, T, r_trajectory)
 
                     if tau + n < T:
-                        # print(type(self.get_q_hat(s_trajectory[tau+n], a_trajectory[tau+n]).tolist()[0][0]))
                         G += (self.gamma**n) * self.get_q_hat(s_trajectory[tau+n], a_trajectory[tau+n]).tolist()[0][0]
-                    # if G > 0.0:
-                    #     print(G)
-                    # print("self.w1 = {}".format(self.w1))
+
                     w1_d = torch.zeros(self.w1.size())
                     b1_d = torch.zeros(self.b1.size())
-                    # with torch.no_grad():
-                    # print("s_tau = {}, s_tau+n = {}".format(s_trajectory[tau], s_trajectory[tau+n]))
                     out = self.get_q_hat(s_trajectory[tau], a_trajectory[tau])
                     out.backward()
                     with torch.no_grad():
 
                         w1_grad = self.w1.grad
                         b1_grad = self.b1.grad
-                        # print("w1_grad = {}, b1 = {}".format(w1_grad, b1_grad))
-                        # print((G - out).tolist()[0][0])
                         w1_d = (alpha * (G - out).tolist()[0][0] * w1_grad)
                         b1_d = (alpha * (G - out).tolist()[0][0] * b1_grad)
                         self.w1 += w1_d
                         self.b1 += b1_d
-                        # print(self.w1, self.b1)
                         self.w1.grad.zero_()
                         self.b1.grad.zero_()
                 if tau == T - 1:
                     break
-
                 t += 1
+            v_est = self.get_v()
+            max_norm.append(np.amax(np.abs(v_est - self.v_star)))
+            mse_list.append(self.mse(v_est, self.v_star))
+            num_actions_list.append(num_actions)
+            
+            # if count % 1 == 0:
+            #     mse_list.append(self.mse(v_est, self.v_star))
+            #     mse_itr_number.append(count)
+            # print(count)
             if count > 1000:
                 break
-        return count 
+        return count, num_actions_list, max_norm, mse_list
 
+    def get_v(self):
+        for i in range(5):
+            for j in range(5):
+                q_val = np.array([])
+                for a in self.actions:
+                    q_val = np.append(q_val, (self.get_q_hat((i,j), a)).tolist()[0][0])
+                self.v[i, j] = max(q_val)
+        return self.v
+
+    def get_policy(self):
+        k = 0
+        for i in range(5):
+            for j in range(5):
+                probs = np.array([])
+                for a in self.actions:
+                    probs = np.append(probs, (self.get_q_hat((i,j), a)).tolist()[0][0])
+                if i == 4 and j == 4:
+                    print("G", end = " ")
+                elif (i == 2 or i == 3) and j == 2:
+                    print(" ", end = " ")
+                else:
+                    probs = np.exp(probs)
+                    probs /= sum(probs)
+                    ind = np.argmax(probs)
+                    print(self.arrows[ind], end=" ")
+                    # print(probs, end=" ")
+                    k += 1
+            print()
+
+    def mse(self, m1, m2):
+        return np.square(np.subtract(m1, m2)).mean() 
 def main():
     gamma = 0.9
     n = 8
     alpha = 0.1
     eps = 0.05
     episodic = EpisodciNstep(gamma)
-    episodic.episodic_n_step(n, alpha, eps)
-    # for s in episodic.states:
-    k = 0
-    for i in range(5):
-        for j in range(5):
-            probs = np.array([])
-            for a in episodic.actions:
-                probs = np.append(probs, (episodic.get_q_hat((i,j), a)).tolist()[0][0])
-            if i == 4 and j == 4:
-                print("G", end = " ")
-            elif (i == 2 or i == 3) and j == 2:
-                print(" ", end = " ")
-            else:
-                ind = np.argmax(probs)
-                print(episodic.arrows[ind], end=" ")
-                k += 1
+    count, num_actions_list, max_norm, mse_list = episodic.episodic_n_step(n, alpha, eps)
 
-        print()
-
-    for i in range(5):
-        for j in range(5):
-            q_val = np.array([])
-            for a in episodic.actions:
-                q_val = np.append(q_val, (episodic.get_q_hat((i,j), a)).tolist()[0][0])
-            episodic.v[i, j] = max(q_val)
+    episodic.get_policy()
+    v_test = episodic.get_v()
     
-    print(episodic.v)
-    print("MSE = {}".format(np.square(np.subtract(episodic.v, episodic.v_star)).mean()))
-    print("max_norm = {}".format(np.amax(np.abs(episodic.v - episodic.v_star))))
+    print(v_test)
+    print("MSE = {}".format(np.square(np.subtract(v_test, episodic.v_star)).mean()))
+    print("max_norm = {}".format(np.amax(np.abs(v_test - episodic.v_star))))
     
+    plt.figure(0)
+    plt.plot(num_actions_list)
+    plt.xlabel("Number of episode")
+    plt.ylabel("Number of actions")
 
+    plt.figure(1)
+    plt.plot(max_norm)
+    plt.xlabel("Number of episodes")
+    plt.ylabel("Max Norm")
+
+    plt.figure(2)
+    plt.plot(mse_list)
+    plt.xlabel("Number of episodes")
+    plt.ylabel("MSE")
+
+    plt.show()
 if __name__ == '__main__':
     main()
