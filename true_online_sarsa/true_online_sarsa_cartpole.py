@@ -3,92 +3,105 @@ from collections import defaultdict
 import random
 from matplotlib import pyplot as plt
 import math
+import gym
 
 
-actions = {0 : -1, 1 : 0, 2 : 1}
 
 def discretize(state, bins):
-    x, v = state
-    x_index = (x - (-1.2))/(0.5-(-1.2))*bins
-    v_index = (v - (-0.07))/(0.07-(-0.07))*bins
+    (x, v, theta, theta_v) = state
+    x_index = (x - (-4.8))/(4.8-(-4.8))*bins
+    theta_index = (theta - (-0.418))/(0.418-(-0.418))*bins
+    v_index = (v - (-5))/(5-(-5))*bins
+    theta_v_index = (theta_v - (-5))/(5-(-5))*bins
     if x_index == bins:
         x_index = bins-1
+    if theta_index == bins:
+        theta_index = bins - 1
     if v_index == bins:
-        v_index = bins - 1
-    return (math.floor(x_index), math.floor(v_index))
+        v_index = bins-1
+    if theta_v_index == bins:
+        theta_v_index = bins - 1
+    return (math.floor(x_index), math.floor(v_index), math.floor(theta_index), math.floor(theta_v_index))
 
-# actions -> [0, 1, 2] = [-1, 0, 1]
+# actions -> [0, 1] = [0, 1]
 def choose_action(q, s, epsilon):
     x = np.array(q[s])
     a_star = list(np.argwhere(x == max(x)).flatten())
     prob = np.random.uniform()
     if prob < epsilon:
-        return random.sample([0, 1, 2], 1)[0]
+        return random.sample([0, 1], 1)[0]
     else:
         return random.sample(a_star, 1)[0]
 
-def observe(s, a, no_of_bins):
-    x_t, v_t = s
-    next_v = v_t + 0.001 * actions[a] - 0.0025 * math.cos(3 * x_t)
-    next_x = x_t + next_v
+# def observe(s, a, no_of_bins):
+#     x_t, v_t = s
+#     next_v = v_t + 0.001 * actions[a] - 0.0025 * math.cos(3 * x_t)
+#     next_x = x_t + next_v
 
-    if next_v < -0.07:
-        next_v = -0.07
-    if next_v > 0.07:
-        next_v = 0.07
+#     if next_v < -0.07:
+#         next_v = -0.07
+#     if next_v > 0.07:
+#         next_v = 0.07
 
-    if next_x < -1.2:
-        next_x = -1.2
-        next_v = 0
-    if next_x > 0.5:
-        next_x = 0.5
-        next_v = 0
+#     if next_x < -1.2:
+#         next_x = -1.2
+#         next_v = 0
+#     if next_x > 0.5:
+#         next_x = 0.5
+#         next_v = 0
 
-    reward = -1
-    if discretize((next_x, next_v), no_of_bins)[0] == no_of_bins-1:
-        reward = 0
+#     reward = -1
+#     if discretize((next_x, next_v), no_of_bins)[0] == no_of_bins-1:
+#         reward = 0
     
-    return (next_x, next_v), reward
+#     return (next_x, next_v), reward
 
 def get_x(state, action, bins):
-    x = np.zeros((bins * bins * 3))
-    index = state[0]*(bins * 3) + state[1]*3 + action
-    if (discretize(state, bins)[0] != bins - 1):
-        x[index] = 1
-    return x
+    x = np.zeros((bins,bins,bins,bins,2)) 
+    if np.abs(state[0]) > 2.4 or np.abs(state[2]) > 0.2095:
+        return x.flatten()
+    dstate = discretize(state, bins)
+    x[dstate][action] = 1
+    return x.flatten()
 
 def true_online_sarsa(gamma, alpha, lam, epsilon, max_iters, bins):
     iters = 0
-    q = np.zeros((bins, bins, 3)) # q -> [["-1", "0", "1"]], 0 - -1, 1 - 0, 2 - 1
-    w = np.random.rand((bins * bins * 3))
+    q = np.zeros((bins, bins, bins, bins, 2)) # q -> [["0", "1"]], 0 - -1, 1 - 0, 2 - 1
+    w = np.random.rand((bins * bins * bins * bins * 2))
     episodes_time = []
     steps_arr = []
     while True:
-        # print(iters)
+        print(iters)
         if iters == max_iters:
             break
-        if (iters % 1000) == 0 and alpha > 0.05:
+        if (iters % 500) == 0 and alpha > 0.05:
             alpha -= 0.05
             # print(alpha)
         if (iters % 500) == 0 and epsilon > 0.1:
             epsilon -= 0.05
         # start an episode
         steps = 0
-        start_state = (random.uniform(-0.6, -0.4), 0)
+        start_state = env.reset()[0]
+        # print(start_state)
+        # start_state = (random.uniform(-0.05, 0.05), random.uniform(-0.05, 0.05), random.uniform(-0.05, 0.05), random.uniform(-0.05, 0.05))
         s = start_state
         dis_s = discretize(s, bins)
         a = choose_action(q, dis_s, epsilon)
-        x = get_x(dis_s, a, bins)
+        x = get_x(s, a, bins)
         Q_old = 0
-        z = np.zeros((bins * bins * 3))
+        z = np.zeros((bins * bins * bins * bins * 2))
         episodes_time.append(iters)
-        while (dis_s[0] != bins - 1) and steps < 1001:
+        terminated = False
+        truncated = False
+        while True:
             episodes_time.append(iters)
             steps += 1
-            next_state, reward = observe(s, a, bins)
+            next_state, reward, terminated, truncated, info = env.step(a)
+            if terminated or truncated:
+                break
             dis_next_state = discretize(next_state, bins)
             next_action = choose_action(q, dis_next_state, epsilon)
-            next_x = get_x(dis_next_state, next_action, bins)
+            next_x = get_x(next_state, next_action, bins)
             # print("x_shape: ")
             # print(x.shape)
             # print("w shape: ")
@@ -107,8 +120,6 @@ def true_online_sarsa(gamma, alpha, lam, epsilon, max_iters, bins):
             s = next_state
             dis_s = dis_next_state
             a = next_action
-            # print(q)
-            # q[s[0]][s[1]][a] += alpha * (reward + gamma * q[next_state[0]][next_state[1]][next_action] - q[s[0]][s[1]][a])
 
         steps_arr.append(steps)
         iters += 1
@@ -148,21 +159,22 @@ def get_v(q, pi, bins):
 def evaluate_policy(q, bins):
     eval = []
     for i in range(10):
-        s = (np.random.uniform(-0.6, -0.4), 0)
+        s = env.reset()[0]
         ds = discretize(s, bins)
         count = 0
-        while ds[0] != bins - 1 and count <= 1000:
+        terminated = False
+        truncated = False
+        while True:
+            if terminated or truncated:
+                break
             count += 1
             a = choose_action(q, ds, epsilon=0)
-            s_prime, _ = observe(s, a, bins)
+            s_prime, reward, terminated, truncated, info = env.step(a)
             ds_prime = discretize(s_prime, bins)
             s = s_prime
             ds = ds_prime
         eval.append(count)
 
-    for i in eval:
-        if i > 1000:
-            eval.remove(i)
     return eval
 
 # gamma = 0.90
@@ -180,22 +192,24 @@ def evaluate_policy(q, bins):
 # print("Mean steps taken (during training): " + str(np.mean(steps_reached)))
 
 
-gamma = 0.90
-alpha = 0.1
-epsilon = 0.3
-lam = 0.1
-bins = 15
+gamma = 1.0
+alpha = 0.15
+epsilon = 0.5
+lam = 0.08
+bins = 20
+env = gym.make('CartPole-v1')
 
 min_actions = 10000000
 min_episodes = 1000
 a_ep_plots = []
 steps_arrs = []
 qs = []
-for i in range(10):
+max_steps = 0
+for i in range(2):
     print(i)
-    q, iters, to_plot, steps_arr = true_online_sarsa(gamma, alpha, lam, epsilon, 1500, bins)
+    q, iters, to_plot, steps_arr = true_online_sarsa(gamma, alpha, lam, epsilon, 1000, bins)
     qs.append(q)
-    print(iters)
+    max_steps = max(max_steps, max(steps_arr))
     min_actions = min(min_actions, len(to_plot))
     a_ep_plots.append(to_plot)
     min_episodes = min(min_episodes, iters)
@@ -213,13 +227,14 @@ for plot in steps_arrs:
 avg_q = np.mean(qs, axis = 0)
 eval = evaluate_policy(avg_q, bins)
 print("Mean steps taken (during eval): " + str(np.mean(eval)))
+print(max_steps)
 
 plt.figure(0)
 plt.plot(np.mean(np.array(plot_data_1), axis = 0))
 plt.xlabel("Number of actions")
 plt.ylabel("Number of episodes")
 plt.figure(1)
-plt.errorbar(np.arange(1000)[::15], np.mean(plot_data_2, axis = 0)[::15],yerr=np.std(plot_data_2, axis = 0)[::15], fmt = '', capsize=1)
+plt.errorbar(np.arange(1000)[::5], np.mean(plot_data_2, axis = 0)[::5],yerr=np.std(plot_data_2, axis = 0)[::5], fmt = '.', capsize=1)
 plt.xlabel("Number of episodes")
 plt.ylabel("Number of steps needed to reach goal state")
 plt.show()
